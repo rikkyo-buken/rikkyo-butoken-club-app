@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# どのURLを開いても画面（index.html）を返す。/join/xxxx などのため
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

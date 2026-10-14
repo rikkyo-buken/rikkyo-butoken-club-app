@@ -8,6 +8,12 @@
 ## フォルダ構成
 
 ```
+src/            画面（React）
+  pages/        画面ごとのファイル。admin/ は管理者専用
+  components/   共通の部品（下部タブ、下から出るパネルなど）
+  lib/          Supabase接続、ログイン状態と権限、日付、表示名
+  styles.css    色・角丸などのデザイン設定
+public/icons/   ホーム画面用のアイコン
 supabase/
   migrations/   データベースの定義。番号順に流す
     ..._schema.sql     テーブル
@@ -31,8 +37,21 @@ Supabaseの管理画面 → SQL Editor で、`supabase/migrations/` のファイ
 
 ### 2. ログインの設定
 
-Authentication → Sign In / Providers で、Email を有効にする（メールで届くリンクでログインする方式）。
-パスワードによるログインは使わない。
+ログインは「メールで届くリンク」か「メールに書かれたコード」で行う。パスワードは使わない。
+iPhoneのホーム画面アプリではリンクを押すとSafariが開いてしまうため、コード入力も必要になる。
+
+1. Authentication → Providers で Email が有効になっていることを確認する
+2. Authentication → URL Configuration
+   - Site URL：アプリのURL（例：`https://xxxx.netlify.app`）
+   - Redirect URLs：`https://xxxx.netlify.app/**` と `http://localhost:5173/**` を追加
+3. Authentication → Email Templates の **Magic Link** と **Confirm signup** の両方に、コードを足す。例：
+   ```html
+   <h2>舞研アプリへのログイン</h2>
+   <p><a href="{{ .ConfirmationURL }}">ここを押してログイン</a></p>
+   <p>ホーム画面のアプリから使う場合は、次のコードを入力してください：</p>
+   <p style="font-size:24px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
+   ```
+4. **メール送信サーバー（SMTP）を設定する**。Supabase標準のメール送信は、Supabaseのチームメンバー宛てにしか送れず、1時間に2通までしか送れない。部員に使ってもらう前に、Authentication → SMTP Settings で外部の送信サーバーを設定する（例：サークル用Gmailのアプリパスワードを使う `smtp.gmail.com`）
 
 ### 3. 最初の管理者を登録する
 
@@ -50,6 +69,18 @@ Authentication → Sign In / Providers で、Email を有効にする（メー�
    ```
 
 2人目以降は、アプリの管理画面から招待リンクを発行する。管理者は最低2人置く。
+
+## 画面の開発・公開
+
+```sh
+cp .env.example .env   # 開発用Supabaseにつなぐ
+npm install
+npm run dev            # http://localhost:5173 で確認
+npm run build          # 公開用のファイルを dist/ に作る
+```
+
+Netlify はこのリポジトリにつなぐと、`main` に反映されるたびに自動で公開される（設定は `netlify.toml`）。
+Netlify の Environment variables に `VITE_SUPABASE_URL` と `VITE_SUPABASE_ANON_KEY` を登録する。
 
 ## 権限ルールのテスト
 
