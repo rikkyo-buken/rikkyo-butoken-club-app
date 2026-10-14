@@ -14,6 +14,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // 読み込みそのものが失敗したときも、真っ白にせず内容を出す
+      window.addEventListener('error', function (e) {
+        var root = document.getElementById('root')
+        if (root && !root.children.length) {
+          root.innerHTML = '<div style="padding:24px;font-family:sans-serif;line-height:1.6">' +
+            '<h1 style="font-size:20px">読み込みに失敗しました</h1><p>この画面を管理者に送ってください。</p>' +
+            '<pre style="white-space:pre-wrap;word-break:break-all;background:#FFE6EA;padding:12px;border-radius:12px"></pre></div>'
+          root.querySelector('pre').textContent = (e.message || '') + '\n' + (e.filename || '')
+        }
+      })
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
