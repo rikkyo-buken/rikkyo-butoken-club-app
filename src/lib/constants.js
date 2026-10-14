@@ -34,8 +34,9 @@ export function currentFiscalYear(date = new Date()) {
   return jst.getMonth() >= 3 ? jst.getFullYear() : jst.getFullYear() - 1
 }
 
+// 5年目以上は4年生として扱う（データベースの grade_of() と同じ）
 export function gradeOf(joinYear) {
-  return currentFiscalYear() - joinYear + 1
+  return Math.min(currentFiscalYear() - joinYear + 1, 4)
 }
 
 export function targetLabel(grades) {
@@ -46,3 +47,27 @@ export function targetLabel(grades) {
   }
   return sorted.map((g) => `${g}年`).join('・')
 }
+
+export const BILL_KIND_LABELS = { dues: '部費', competition: '大会', camp_event: '合宿・イベント' }
+export const ITEM_STATUS = {
+  unpaid: { label: '未納', chip: 'red' },
+  pending: { label: '確認待ち', chip: 'orange' },
+  paid: { label: '支払い済み', chip: 'green' },
+  waived: { label: '免除', chip: '' }
+}
+export const METHOD_LABELS = { transfer: '振込', cash: '現金' }
+export const COMPETITION_STATUS = {
+  recruiting: { label: '募集中', chip: 'primary' },
+  confirmed: { label: '確定', chip: 'green' },
+  finished: { label: '終了', chip: '' }
+}
+export const ENTRY_STATUS = {
+  requested: { label: '希望提出済み', chip: 'orange' },
+  confirmed: { label: 'エントリー確定', chip: 'green' },
+  withdrawn: { label: '見送り', chip: '' }
+}
+export const DANCES = {
+  latin: ['サンバ', 'チャチャチャ', 'ルンバ', 'パソドブレ', 'ジャイブ'],
+  standard: ['ワルツ', 'タンゴ', 'スロー', 'クイック', 'ヴェニーズ']
+}
+export const EQUIPMENT_STATUS = { available: '貸出可', repair: '修理中', disposed: '廃棄' }

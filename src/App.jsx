@@ -10,7 +10,9 @@ import Members from './pages/Members'
 import Profile from './pages/Profile'
 import Invites from './pages/admin/Invites'
 import GradeSettings from './pages/admin/GradeSettings'
-import ComingSoon from './pages/ComingSoon'
+import Money from './pages/Money'
+import Contest from './pages/Contest'
+import Equipment from './pages/Equipment'
 
 export default function App() {
   const { loading } = useSession()
@@ -43,9 +45,9 @@ function Gate() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="schedule" element={<Schedule />} />
-        <Route path="money" element={<ComingSoon title="お金" />} />
-        <Route path="contest" element={<ComingSoon title="大会" />} />
-        <Route path="equipment" element={<ComingSoon title="備品" />} />
+        <Route path="money" element={<Money />} />
+        <Route path="contest" element={<Contest />} />
+        <Route path="equipment" element={<Equipment />} />
         <Route path="members" element={<Members />} />
         <Route path="me" element={<Profile />} />
         {isAdmin && <Route path="admin/invites" element={<Invites />} />}

@@ -146,6 +146,28 @@ a { color: var(--primary-deep); }
   font-weight: 800; flex-shrink: 0;
 }
 
+/* 画面内の切り替え（自分 / 会計 など） */
+.segmented {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px;
+  background: var(--surface); border-radius: 999px; padding: 4px; box-shadow: var(--shadow);
+}
+.segmented button {
+  height: 40px; border: 0; border-radius: 999px; background: transparent;
+  font-weight: 800; font-size: 14px; color: var(--muted); cursor: pointer;
+}
+.segmented button[aria-selected='true'] { background: var(--primary); color: #fff; }
+
+.big-num { font-size: 32px; font-weight: 800; letter-spacing: -0.01em; }
+.progress { height: 10px; border-radius: 5px; background: #F1ECF8; overflow: hidden; }
+.progress > span { display: block; height: 100%; background: var(--primary); border-radius: 5px; }
+.list-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.list-row:first-child { border-top: 0; }
+.thumb {
+  width: 60px; height: 60px; border-radius: 18px; flex-shrink: 0; object-fit: cover;
+  background: var(--mint); display: flex; align-items: center; justify-content: center; color: var(--ink);
+}
+.amount-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
 /* 下部タブ：ふわっと浮いたカプセル */
 .tabbar {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 10;
@@ -210,3 +232,5 @@ a { color: var(--primary-deep); }
   display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 26px; color: var(--ink);
 }
 .code-input { letter-spacing: 0.4em; text-align: center; font-size: 22px; font-weight: 800; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.nowrap { white-space: nowrap; }

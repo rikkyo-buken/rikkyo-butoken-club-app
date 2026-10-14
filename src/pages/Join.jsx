@@ -90,7 +90,7 @@ export function ProfileForm({ token }) {
           <span>入部した年度</span>
           <select className="select" value={form.join_year} onChange={(e) => set('join_year', e.target.value)}>
             {years.map((y, i) => (
-              <option key={y} value={y}>{y}年度（今 {i + 1}年）</option>
+              <option key={y} value={y}>{y}年度（今 {Math.min(i + 1, 4)}年）</option>
             ))}
           </select>
         </label>

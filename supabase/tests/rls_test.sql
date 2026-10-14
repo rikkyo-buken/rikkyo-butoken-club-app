@@ -165,7 +165,7 @@ select pg_temp.must_equal('主将は集計を見られる（支払い済み1人�
 reset role;
 
 -- ===== 5. 大会エントリー =====
-insert into public.competitions (id, name, held_on, request_deadline, fee_per_dance) values
+insert into public.competitions (id, name, held_on, request_deadline, entry_fee) values
   ('40000000-0000-0000-0000-000000000001', '秋季大会', current_date + 30, now() + interval '5 days', 1250),
   ('40000000-0000-0000-0000-000000000002', '締切済み大会', current_date + 10, now() - interval '1 day', 1250);
 insert into public.competition_dances values
@@ -207,6 +207,65 @@ select pg_temp.must_fail('他人名義で借用申請できない',
      ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002')$q$);
 select pg_temp.must_fail('部員は備品を登録できない',
   $q$insert into public.equipment (name) values ('x')$q$);
+reset role;
+
+-- ===== 段階2：大会の確定と請求 =====
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');  -- 1年
+select pg_temp.must_fail('部員は組の金額を変えられない',
+  $q$update public.entries set fee = 0 where id = '41000000-0000-0000-0000-000000000001'$q$);
+select pg_temp.must_fail('部員は大会を確定できない',
+  $q$select public.confirm_competition('40000000-0000-0000-0000-000000000001', current_date + 7)$q$);
+reset role;
+
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');  -- 主将
+update public.entries set fee = 3001 where id = '41000000-0000-0000-0000-000000000001';
+select public.confirm_competition('40000000-0000-0000-0000-000000000001', current_date + 7);
+select pg_temp.must_fail('同じ大会は二重に確定できない',
+  $q$select public.confirm_competition('40000000-0000-0000-0000-000000000001', current_date + 7)$q$);
+reset role;
+select pg_temp.must_equal('確定でリーダーに半額（端数込み 1501円）が請求される',
+  (select amount from public.bill_items i join public.bills b on b.id = i.bill_id
+    where b.competition_id = '40000000-0000-0000-0000-000000000001' and i.member_id = '10000000-0000-0000-0000-000000000001'), 1501);
+select pg_temp.must_equal('確定でパートナーに半額（1500円）が請求される',
+  (select amount from public.bill_items i join public.bills b on b.id = i.bill_id
+    where b.competition_id = '40000000-0000-0000-0000-000000000001' and i.member_id = '10000000-0000-0000-0000-000000000002'), 1500);
+select pg_temp.must_equal('確定すると大会の状態が「確定」になる',
+  (select count(*) from public.competitions where id = '40000000-0000-0000-0000-000000000001' and status = 'confirmed'), 1);
+
+-- ===== 段階2：学年ごとの金額で請求 =====
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
+select pg_temp.must_fail('部員は請求を一括作成できない',
+  $q$select public.create_bill('dues', '後期部費', current_date + 14, null, '{"1": 3000}'::jsonb)$q$);
+reset role;
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000f');  -- 財務
+select public.create_bill('dues', '後期部費', current_date + 14, null, '{"1": 3000, "2": 5000, "3": 5000, "4": 5000}'::jsonb);
+select pg_temp.must_equal('在籍部員6人分の請求ができる（引退者は除く）',
+  (select count(*) from public.bill_items i join public.bills b on b.id = i.bill_id where b.title = '後期部費'), 6);
+select pg_temp.must_equal('1年には1年の金額（3000円）が入る',
+  (select amount from public.bill_items i join public.bills b on b.id = i.bill_id
+    where b.title = '後期部費' and i.member_id = '10000000-0000-0000-0000-000000000001'), 3000);
+reset role;
+select pg_temp.must_equal('5年目以上は4年生として扱う', public.grade_of(public.current_fiscal_year() - 6), 4);
+
+-- ===== 段階2：振込先 =====
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
+select pg_temp.must_equal('部員は振込先を読める', (select count(*) from public.club_settings), 1);
+select pg_temp.must_equal('部員は振込先を書き換えられない（0件更新）',
+  pg_temp.affected($q$update public.club_settings set bank_info = 'x'$q$), 0);
+reset role;
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000f');
+select pg_temp.must_equal('財務は振込先を登録できる',
+  pg_temp.affected($q$update public.club_settings set bank_info = '〇〇銀行 池袋支店 普通 1234567'$q$), 1);
+reset role;
+
+-- ===== 段階2：貸出の承認と返却 =====
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000a');  -- 管理者（備品管理の権限も持つ）
+update public.loans set status = 'lent', due_on = current_date + 7 where status = 'requested';
+select pg_temp.must_equal('貸出にすると貸出日が自動で入る',
+  (select count(*) from public.loans where status = 'lent' and lent_on = current_date), 1);
+update public.loans set status = 'returned' where status = 'lent';
+select pg_temp.must_equal('返却にすると返却日が自動で入る',
+  (select count(*) from public.loans where status = 'returned' and returned_on = current_date), 1);
 reset role;
 
 -- ===== 7. 管理者 =====

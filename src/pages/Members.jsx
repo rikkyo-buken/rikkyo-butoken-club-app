@@ -146,7 +146,7 @@ function MemberSheet({ m, roles, onClose, onSaved }) {
       </fieldset>
       <label className="field"><span>入部年度（学年はここから計算）</span>
         <select className="select" value={joinYear} onChange={(e) => setJoinYear(Number(e.target.value))}>
-          {years.map((y) => <option key={y} value={y}>{y}年度（今 {fy - y + 1}年）</option>)}
+          {years.map((y) => <option key={y} value={y}>{y}年度（今 {Math.min(fy - y + 1, 4)}年）</option>)}
         </select>
       </label>
       <fieldset className="field" style={{ border: 0, padding: 0, margin: 0 }}>
