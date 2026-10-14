@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { WEEKDAYS, fmtDate, fmtTime } from '../lib/dates'
-import { targetLabel } from '../lib/constants'
+import { pastelFor, targetLabel } from '../lib/constants'
 import GradePicker from '../components/GradePicker'
 import Sheet from '../components/Sheet'
 
@@ -34,7 +34,7 @@ export default function Home() {
           <span className="sub" style={{ fontWeight: 700 }}>{now.getMonth() + 1}月{now.getDate()}日（{WEEKDAYS[now.getDay()]}）</span>
           <h1 className="page-title">おつかれ、{member.nickname}！</h1>
         </div>
-        <Link to="/me" className="icon-btn" aria-label="プロフィール" style={{ textDecoration: 'none', color: 'var(--ink)', fontWeight: 900 }}>
+        <Link to="/me" className="icon-btn" aria-label="プロフィール" style={{ textDecoration: 'none', color: 'var(--ink)', fontWeight: 800, background: pastelFor(member.nickname) }}>
           {member.nickname.slice(0, 1)}
         </Link>
       </div>
@@ -44,7 +44,7 @@ export default function Home() {
           <span style={{ fontSize: 12, fontWeight: 800 }}>次の予定</span>
           {first ? (
             <>
-              <span style={{ fontSize: 20, fontWeight: 900 }}>{fmtDate(first.starts_at)} {first.title}</span>
+              <span style={{ fontSize: 20, fontWeight: 800 }}>{fmtDate(first.starts_at)} {first.title}</span>
               <span style={{ fontSize: 14, fontWeight: 700 }}>{fmtTime(first.starts_at)}–{fmtTime(first.ends_at)}{first.location ? `・${first.location}` : ''}</span>
               {next.slice(1).map((e) => (
                 <span key={e.id} className="sub" style={{ color: 'var(--ink)' }}>{fmtDate(e.starts_at)} {fmtTime(e.starts_at)} {e.title}</span>
@@ -59,11 +59,11 @@ export default function Home() {
       <div className="grid-2">
         <Link to="/members" className="card tint-pink" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div style={{ fontSize: 12, fontWeight: 800 }}>部員リスト</div>
-          <div style={{ fontSize: 18, fontWeight: 900, marginTop: 6 }}>見る</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>見る</div>
         </Link>
-        <Link to="/money" className="card tint-yellow" style={{ textDecoration: 'none', color: 'inherit' }}>
+        <Link to="/money" className="card tint-sky" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div style={{ fontSize: 12, fontWeight: 800 }}>お金・大会・備品</div>
-          <div style={{ fontSize: 18, fontWeight: 900, marginTop: 6 }}>準備中</div>
+          <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>準備中</div>
         </Link>
       </div>
 

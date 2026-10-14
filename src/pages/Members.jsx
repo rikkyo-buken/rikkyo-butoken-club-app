@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
-import { GRADES, MAJOR_LABELS, POSITION_LABELS, ROLE_LABELS, ROLE_ORDER, currentFiscalYear, gradeOf } from '../lib/constants'
+import { GRADES, MAJOR_LABELS, POSITION_LABELS, ROLE_LABELS, ROLE_ORDER, currentFiscalYear, gradeOf, pastelFor } from '../lib/constants'
 import { ChevronLeft, GearIcon, LinkIcon } from '../components/Icons'
 import Sheet from '../components/Sheet'
 
@@ -81,7 +81,7 @@ function MemberRow({ m, roles }) {
   const sortedRoles = ROLE_ORDER.filter((r) => roles.includes(r))
   return (
     <div className="row" style={{ gap: 12 }}>
-      <div className="avatar">{m.nickname.slice(0, 1)}</div>
+      <div className="avatar" style={{ background: pastelFor(m.nickname) }}>{m.nickname.slice(0, 1)}</div>
       <div className="stack grow" style={{ gap: 4 }}>
         <div className="row" style={{ gap: 6, alignItems: 'baseline' }}>
           <span style={{ fontWeight: 800 }}>{m.nickname}</span>

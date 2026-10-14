@@ -44,9 +44,9 @@ export default function Schedule() {
       <div className="page-header">
         <h1 className="page-title">予定</h1>
         <div className="row">
-          <button className="icon-btn" style={{ background: '#fff' }} aria-label="前の週" onClick={() => moveWeek(-1)}><ChevronLeft /></button>
+          <button className="icon-btn" aria-label="前の週" onClick={() => moveWeek(-1)}><ChevronLeft /></button>
           <span style={{ fontWeight: 800, minWidth: 64, textAlign: 'center' }}>{weekStart.getMonth() + 1}月</span>
-          <button className="icon-btn" style={{ background: '#fff' }} aria-label="次の週" onClick={() => moveWeek(1)}><ChevronRight /></button>
+          <button className="icon-btn" aria-label="次の週" onClick={() => moveWeek(1)}><ChevronRight /></button>
         </div>
       </div>
 

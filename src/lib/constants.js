@@ -20,6 +20,14 @@ export const GRADE_PERMISSIONS = [
 
 export const GRADES = [1, 2, 3, 4]
 
+// 名前ごとに決まったパステル色（アイコンの背景用）
+const PASTELS = ['#FFD9EA', '#D3F5E4', '#FFEDB0', '#DCEEFF', '#FFE0CF', '#E6DDFF']
+export function pastelFor(text = '') {
+  let h = 0
+  for (const ch of text) h = (h * 31 + ch.codePointAt(0)) >>> 0
+  return PASTELS[h % PASTELS.length]
+}
+
 // 年度は4月始まり（日本時間）。データベースの current_fiscal_year() と同じ計算
 export function currentFiscalYear(date = new Date()) {
   const jst = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Tokyo' }))

@@ -35,7 +35,7 @@ export default function GradeSettings() {
 
       {GRADE_PERMISSIONS.map(({ key, label }) => (
         <div key={key} className="card stack" style={{ gap: 12 }}>
-          <div style={{ fontWeight: 900 }}>{label}</div>
+          <div style={{ fontWeight: 800 }}>{label}</div>
           <div className="choice-row">
             {GRADES.map((g) => (
               <button key={g} type="button" className="choice" aria-pressed={allowed(g, key)}
