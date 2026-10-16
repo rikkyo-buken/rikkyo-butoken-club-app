@@ -82,6 +82,31 @@ npm run build          # 公開用のファイルを dist/ に作る
 Netlify はこのリポジトリにつなぐと、`main` に反映されるたびに自動で公開される（設定は `netlify.toml`）。
 Netlify の Environment variables に `VITE_SUPABASE_URL` と `VITE_SUPABASE_ANON_KEY` を登録する。
 
+## 通知（段階3）のセットアップ（Supabaseプロジェクトごとに1回）
+
+アプリ内のお知らせ（ベル）と毎朝9時の自動チェックは、`..._notifications.sql` と `..._cron.sql` を流すだけで動く。
+スマホへのプッシュ通知には、次の4つを追加で設定する。
+
+1. **Edge Function を作る**：Edge Functions →「Deploy a new function」→「Via Editor」。名前を `send-push` にして、
+   `supabase/functions/send-push/index.ts` の中身を貼り付けて Deploy。
+2. **シークレットを登録する**：Edge Functions → Secrets（または Project Settings → Edge Functions）で
+   - `VAPID_PRIVATE_JWK`：プッシュ通知の秘密鍵（管理者が別途保管しているJSON）
+   - `VAPID_CONTACT`：`mailto:サークル用Gmailのアドレス`
+3. **Database Webhook を作る**：Database → Webhooks →「Create a new hook」
+   - Table：`notifications`、Events：`Insert`
+   - Type：`Supabase Edge Functions`、Function：`send-push`、Method：`POST`
+   - HTTP Headers で「Add auth header with service key」を押して、Authorization ヘッダーを付ける
+4. **Netlify の環境変数**に `VITE_VAPID_PUBLIC_KEY`（`.env.example` にある値）を追加して、公開し直す。
+
+秘密鍵（`VAPID_PRIVATE_JWK`）はコード・チャット・LINEに貼らない。なくした場合は鍵を作り直し、公開鍵と秘密鍵の両方を差し替える
+（そのとき部員は通知をオンにし直す必要がある）。
+
+## 一時停止の防止
+
+`.github/workflows/keepalive.yml` が、月・木の朝に Supabase へ軽くアクセスする。
+本番用を加えるときは、GitHub の Settings → Secrets and variables → Actions → Variables に
+`SUPABASE_PROD_URL` と `SUPABASE_PROD_ANON_KEY` を登録する。
+
 ## 権限ルールのテスト
 
 PostgreSQL 16 が入った環境で：

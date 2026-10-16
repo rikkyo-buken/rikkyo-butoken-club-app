@@ -13,6 +13,7 @@ import GradeSettings from './pages/admin/GradeSettings'
 import Money from './pages/Money'
 import Contest from './pages/Contest'
 import Equipment from './pages/Equipment'
+import Notifications from './pages/Notifications'
 
 export default function App() {
   const { loading } = useSession()
@@ -50,6 +51,7 @@ function Gate() {
         <Route path="equipment" element={<Equipment />} />
         <Route path="members" element={<Members />} />
         <Route path="me" element={<Profile />} />
+        <Route path="notifications" element={<Notifications />} />
         {isAdmin && <Route path="admin/invites" element={<Invites />} />}
         {isAdmin && <Route path="admin/grades" element={<GradeSettings />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

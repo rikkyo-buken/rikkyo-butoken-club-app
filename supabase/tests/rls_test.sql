@@ -304,4 +304,27 @@ reset role;
 select pg_temp.must_equal('引退にするとペアも解除される',
   (select count(*) from public.members where id = '10000000-0000-0000-0000-000000000001' and partner_id is null), 1);
 
+-- ===== 通知 =====
+select pg_temp.must_equal('請求が作られると本人に「請求が届きました」が届く',
+  ((select count(*) from public.notifications where member_id = '10000000-0000-0000-0000-000000000001' and title = '請求が届きました') >= 1)::int, 1);
+select pg_temp.must_equal('支払い報告で財務に通知が届く',
+  (select count(*) from public.notifications where member_id = '10000000-0000-0000-0000-00000000000f' and title = '支払いの報告が届きました'), 1);
+select pg_temp.must_equal('承認すると本人に「入金を確認しました」が届く',
+  (select count(*) from public.notifications where member_id = '10000000-0000-0000-0000-000000000001' and title = '入金を確認しました'), 1);
+select pg_temp.must_equal('ペアが自動でエントリーされると、相手に通知が届く',
+  ((select count(*) from public.notifications where member_id = '10000000-0000-0000-0000-000000000002' and title = 'ペアでエントリーされました') >= 1)::int, 1);
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
+select pg_temp.must_equal('自分宛ての通知しか見えない',
+  (select count(*) from public.notifications where member_id <> '10000000-0000-0000-0000-000000000001'), 0);
+select pg_temp.must_fail('部員は毎朝の自動チェックを実行できない', $q$select public.daily_reminders()$q$);
+reset role;
+
+-- 今日が締切の未納を作って、毎朝のチェックを2回実行 → 通知は1回だけ
+insert into public.bills (id, kind, title, due_date) values ('30000000-0000-0000-0000-0000000000dd', 'dues', '今日締切の部費', (now() at time zone 'Asia/Tokyo')::date);
+insert into public.bill_items (bill_id, member_id, amount) values ('30000000-0000-0000-0000-0000000000dd', '10000000-0000-0000-0000-000000000001', 1000);
+select public.daily_reminders();
+select public.daily_reminders();
+select pg_temp.must_equal('毎朝のチェックで「今日が支払い締切です」が1回だけ届く',
+  (select count(*) from public.notifications where member_id = '10000000-0000-0000-0000-000000000001' and title = '今日が支払い締切です'), 1);
+
 \echo '=== すべてのテストに合格 ==='

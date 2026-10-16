@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
 import { MAJOR_LABELS, POSITION_LABELS, ROLE_LABELS, ROLE_ORDER } from '../lib/constants'
 import { ChevronLeft } from '../components/Icons'
+import { currentSubscription, disablePush, enablePush, pushStatus } from '../lib/push'
 
 export default function Profile() {
   const { member, roles, grade, session, reload } = useSession()
@@ -42,6 +43,7 @@ export default function Profile() {
       </div>
 
       <PartnerCard />
+      <PushCard />
 
       <label className="field"><span>氏名</span>
         <input className="input" required value={f.full_name} onChange={(e) => set('full_name', e.target.value)} />
@@ -114,6 +116,54 @@ function PartnerCard() {
         <button type="button" className="btn btn-small btn-primary nowrap" disabled={busy || !pick || pick === member.partner_id} onClick={() => save(pick)}>設定</button>
       </div>
       {current && <button type="button" className="btn btn-small btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={() => { setPick(''); save(null) }}>ペアを解除する</button>}
+      {msg && <div className={`notice ${msg.type}`}>{msg.text}</div>}
+    </div>
+  )
+}
+
+// この端末でプッシュ通知を受け取る設定
+function PushCard() {
+  const { member } = useSession()
+  const [status] = useState(pushStatus)
+  const [on, setOn] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    if (status === 'ok' && Notification.permission === 'granted') currentSubscription().then((s) => setOn(!!s)).catch(() => {})
+  }, [status])
+
+  async function toggle() {
+    setBusy(true)
+    setMsg(null)
+    try {
+      if (on) { await disablePush(); setOn(false); setMsg({ type: 'ok', text: 'この端末の通知をオフにしました' }) }
+      else { await enablePush(member.id); setOn(true); setMsg({ type: 'ok', text: '通知をオンにしました' }) }
+    } catch (e) {
+      setMsg({ type: 'error', text: e.message || '設定できませんでした' })
+    }
+    setBusy(false)
+  }
+
+  const notes = {
+    'not-configured': '通知の準備がまだ終わっていません（管理者の設定待ち）。',
+    'ios-needs-home': 'iPhoneでは、Safariの共有ボタン →「ホーム画面に追加」から追加したアプリで開くと、通知をオンにできます。',
+    unsupported: 'このブラウザは通知に対応していません。',
+    denied: '端末の設定で、このアプリの通知が拒否されています。設定アプリから許可してください。'
+  }
+
+  return (
+    <div className="card tint-sky stack" style={{ gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 800 }}>スマホへの通知</span>
+      <span style={{ fontSize: 16, fontWeight: 800 }}>{status === 'ok' ? (on ? 'この端末で受け取っています' : 'オフになっています') : '使えません'}</span>
+      <span className="sub" style={{ color: 'var(--ink)' }}>
+        {status === 'ok' ? '請求・締切・承認などのお知らせが、スマホにも届きます。' : notes[status]}
+      </span>
+      {status === 'ok' && (
+        <button type="button" className={`btn btn-small ${on ? '' : 'btn-primary'}`} style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={toggle}>
+          {busy ? '設定中…' : on ? '通知をオフにする' : '通知をオンにする'}
+        </button>
+      )}
       {msg && <div className={`notice ${msg.type}`}>{msg.text}</div>}
     </div>
   )

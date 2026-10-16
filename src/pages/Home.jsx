@@ -8,6 +8,7 @@ import { fmtYmd, todayInput, yen } from '../lib/format'
 import GradePicker from '../components/GradePicker'
 import Sheet from '../components/Sheet'
 import CountUp from '../components/CountUp'
+import Bell from '../components/Bell'
 
 export default function Home() {
   const { member, isOfficer } = useSession()
@@ -53,9 +54,12 @@ export default function Home() {
           <span className="sub" style={{ fontWeight: 700 }}>{now.getMonth() + 1}月{now.getDate()}日（{WEEKDAYS[now.getDay()]}）</span>
           <h1 className="page-title">おつかれ、{member.nickname}！</h1>
         </div>
-        <Link to="/me" className="icon-btn" aria-label="プロフィール" style={{ textDecoration: 'none', color: 'var(--ink)', fontWeight: 800, background: pastelFor(member.nickname) }}>
-          {member.nickname.slice(0, 1)}
-        </Link>
+        <div className="row" style={{ gap: 8 }}>
+          <Bell />
+          <Link to="/me" className="icon-btn" aria-label="プロフィール" style={{ textDecoration: 'none', color: 'var(--ink)', fontWeight: 800, background: pastelFor(member.nickname) }}>
+            {member.nickname.slice(0, 1)}
+          </Link>
+        </div>
       </div>
 
       {unpaid.length > 0 && (
