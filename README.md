@@ -92,10 +92,13 @@ Netlify の Environment variables に `VITE_SUPABASE_URL` と `VITE_SUPABASE_ANO
 2. **シークレットを登録する**：Edge Functions → Secrets（または Project Settings → Edge Functions）で
    - `VAPID_PRIVATE_JWK`：プッシュ通知の秘密鍵（管理者が別途保管しているJSON）
    - `VAPID_CONTACT`：`mailto:サークル用Gmailのアドレス`
-3. **Database Webhook を作る**：Database → Webhooks →「Create a new hook」
-   - Table：`notifications`、Events：`Insert`
-   - Type：`Supabase Edge Functions`、Function：`send-push`、Method：`POST`
-   - HTTP Headers で「Add auth header with service key」を押して、Authorization ヘッダーを付ける
+3. **送信のきっかけを登録する**：`..._push_trigger.sql` を流したあと、SQL Editor で送り先を登録する
+   ```sql
+   insert into public.app_config (key, value) values
+     ('push_function_url', 'https://<プロジェクトID>.supabase.co/functions/v1/send-push'),
+     ('push_function_key', '<そのプロジェクトの anon キー>')
+   on conflict (key) do update set value = excluded.value;
+   ```
 4. **Netlify の環境変数**に `VITE_VAPID_PUBLIC_KEY`（`.env.example` にある値）を追加して、公開し直す。
 
 秘密鍵（`VAPID_PRIVATE_JWK`）はコード・チャット・LINEに貼らない。なくした場合は鍵を作り直し、公開鍵と秘密鍵の両方を差し替える
