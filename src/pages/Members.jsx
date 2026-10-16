@@ -60,7 +60,7 @@ export default function Members() {
       <div className="stack">
         {shown.length === 0 && <div className="card empty">該当する部員はいません</div>}
         {shown.map((m) => {
-          const content = <MemberRow m={m} roles={rolesBy[m.id] ?? []} />
+          const content = <MemberRow m={m} roles={rolesBy[m.id] ?? []} partnerName={members.find((x) => x.id === m.partner_id)?.nickname} />
           return isAdmin ? (
             <button key={m.id} type="button" className="card" style={{ textAlign: 'left', cursor: 'pointer', padding: 12 }} onClick={() => setEditing(m)}>{content}</button>
           ) : (
@@ -77,7 +77,7 @@ export default function Members() {
   )
 }
 
-function MemberRow({ m, roles }) {
+function MemberRow({ m, roles, partnerName }) {
   const sortedRoles = ROLE_ORDER.filter((r) => roles.includes(r))
   return (
     <div className="row" style={{ gap: 12 }}>
@@ -90,6 +90,7 @@ function MemberRow({ m, roles }) {
         <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
           {m.status === 'retired' ? <span className="chip">引退</span> : <span className="chip">{gradeOf(m.join_year)}年</span>}
           <span className="chip">{MAJOR_LABELS[m.major]}・{POSITION_LABELS[m.position] === 'リーダー' ? 'L' : 'P'}</span>
+          {partnerName && <span className="chip soft">ペア：{partnerName}</span>}
           {sortedRoles.map((r) => <span key={r} className="chip primary">{ROLE_LABELS[r]}</span>)}
         </div>
       </div>

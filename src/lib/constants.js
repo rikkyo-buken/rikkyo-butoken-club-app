@@ -58,16 +58,16 @@ export const ITEM_STATUS = {
 export const METHOD_LABELS = { transfer: '振込', cash: '現金' }
 export const COMPETITION_STATUS = {
   recruiting: { label: '募集中', chip: 'primary' },
-  confirmed: { label: '確定', chip: 'green' },
+  confirmed: { label: '募集締切', chip: 'orange' },
   finished: { label: '終了', chip: '' }
 }
 export const ENTRY_STATUS = {
-  requested: { label: '希望提出済み', chip: 'orange' },
-  confirmed: { label: 'エントリー確定', chip: 'green' },
+  requested: { label: 'エントリー済み', chip: 'green' },
+  confirmed: { label: '出場確定', chip: 'green' },
   withdrawn: { label: '見送り', chip: '' }
 }
 export const DANCES = {
   latin: ['サンバ', 'チャチャチャ', 'ルンバ', 'パソドブレ', 'ジャイブ'],
   standard: ['ワルツ', 'タンゴ', 'スロー', 'クイック', 'ヴェニーズ']
 }
-export const EQUIPMENT_STATUS = { available: '貸出可', repair: '修理中', disposed: '廃棄' }
+export const EQUIPMENT_STATUS = { available: '貸出可', dress_rental: 'ドレスレンタル中', repair: '修理中', disposed: '廃棄' }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useSession } from '../lib/session'
@@ -41,6 +41,8 @@ export default function Profile() {
         <span className="sub">入部年度と役職は管理者が変更します。</span>
       </div>
 
+      <PartnerCard />
+
       <label className="field"><span>氏名</span>
         <input className="input" required value={f.full_name} onChange={(e) => set('full_name', e.target.value)} />
       </label>
@@ -68,5 +70,51 @@ export default function Profile() {
       <button className="btn btn-primary btn-block" disabled={busy}>{busy ? '保存中…' : '保存する'}</button>
       <button type="button" className="btn btn-block" onClick={() => supabase.auth.signOut()}>ログアウト</button>
     </form>
+  )
+}
+
+// ペア（カップル）の設定。設定すると相手側にも自動で反映される
+function PartnerCard() {
+  const { member, reload } = useSession()
+  const [members, setMembers] = useState([])
+  const [pick, setPick] = useState(member.partner_id ?? '')
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
+
+  useEffect(() => {
+    supabase.from('members').select('id, nickname, full_name, position, partner_id').eq('status', 'active').order('nickname')
+      .then(({ data }) => setMembers((data ?? []).filter((m) => m.id !== member.id)))
+  }, [member.id])
+
+  const current = members.find((m) => m.id === member.partner_id)
+
+  async function save(value) {
+    setBusy(true)
+    const { error } = await supabase.rpc('set_partner', { p_partner: value || null })
+    setBusy(false)
+    if (error) { setMsg({ type: 'error', text: error.message }); return }
+    setMsg({ type: 'ok', text: value ? 'ペアを設定しました。相手のプロフィールにも反映されます。' : 'ペアを解除しました。' })
+    reload()
+  }
+
+  return (
+    <div className="card tint-pink stack" style={{ gap: 10 }}>
+      <span style={{ fontSize: 12, fontWeight: 800 }}>ペア（カップルの相手）</span>
+      <span style={{ fontSize: 18, fontWeight: 800 }}>{current ? `${current.nickname}（${current.full_name}）` : 'まだ設定していません'}</span>
+      <span className="sub" style={{ color: 'var(--ink)' }}>大会にエントリーすると、ペアの相手も自動でエントリーされます。</span>
+      <div className="row">
+        <select className="select grow" value={pick} onChange={(e) => setPick(e.target.value)} aria-label="ペアの相手">
+          <option value="">選んでください</option>
+          {members.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.nickname}（{m.full_name}・{POSITION_LABELS[m.position]}）{m.partner_id && m.partner_id !== member.id ? '・別のペアあり' : ''}
+            </option>
+          ))}
+        </select>
+        <button type="button" className="btn btn-small btn-primary nowrap" disabled={busy || !pick || pick === member.partner_id} onClick={() => save(pick)}>設定</button>
+      </div>
+      {current && <button type="button" className="btn btn-small btn-ghost" style={{ alignSelf: 'flex-start' }} disabled={busy} onClick={() => { setPick(''); save(null) }}>ペアを解除する</button>}
+      {msg && <div className={`notice ${msg.type}`}>{msg.text}</div>}
+    </div>
   )
 }

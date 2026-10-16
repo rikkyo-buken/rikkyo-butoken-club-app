@@ -7,6 +7,7 @@ import { pastelFor, targetLabel, ENTRY_STATUS } from '../lib/constants'
 import { fmtYmd, todayInput, yen } from '../lib/format'
 import GradePicker from '../components/GradePicker'
 import Sheet from '../components/Sheet'
+import CountUp from '../components/CountUp'
 
 export default function Home() {
   const { member, isOfficer } = useSession()
@@ -23,9 +24,9 @@ export default function Home() {
     const [{ data: ev }, { data: an }, { data: bi }, { data: co }, { data: en }, { data: lo }] = await Promise.all([
       supabase.from('events').select('*').gte('ends_at', new Date().toISOString()).order('starts_at').limit(3),
       supabase.from('announcements').select('*, author:members(nickname)').order('created_at', { ascending: false }).limit(10),
-      supabase.from('bill_items').select('amount, bill:bills(title, due_date)').eq('member_id', member.id).eq('status', 'unpaid'),
+      supabase.from('bill_items').select('amount, bill:bills!inner(title, due_date, closed_at)').eq('member_id', member.id).eq('status', 'unpaid').is('bill.closed_at', null),
       supabase.from('competitions').select('*').eq('status', 'recruiting').gte('request_deadline', new Date().toISOString()).order('request_deadline'),
-      supabase.from('entries').select('competition_id, status').or(`leader_id.eq.${member.id},partner_id.eq.${member.id}`),
+      supabase.from('entries').select('competition_id, status').eq('member_id', member.id),
       supabase.from('loans').select('due_on, equipment:equipment(name)').eq('borrower_id', member.id).eq('status', 'lent')
     ])
     setNext(ev ?? [])
@@ -64,7 +65,7 @@ export default function Home() {
             <span className="grow" />
             {nearestDue && <span className="sub">最短締切 {fmtYmd(nearestDue)}</span>}
           </div>
-          <span className="big-num">{yen(unpaidTotal)}</span>
+          <span className="big-num"><CountUp value={unpaidTotal} /></span>
           {unpaid.slice(0, 3).map((i, n) => (
             <div key={n} className="row" style={{ fontSize: 14 }}><span className="grow">{i.bill.title}</span><b>{yen(i.amount)}</b></div>
           ))}
@@ -91,10 +92,10 @@ export default function Home() {
 
       <div className="grid-2">
         <Link to="/contest" className="card tint-pink" style={{ textDecoration: 'none', color: 'inherit' }}>
-          <div style={{ fontSize: 12, fontWeight: 800 }}>{comp ? '大会の希望締切' : '大会'}</div>
+          <div style={{ fontSize: 12, fontWeight: 800 }}>{comp ? '大会のエントリー締切' : '大会'}</div>
           <div style={{ fontSize: 18, fontWeight: 800, marginTop: 6 }}>{comp ? `あと${daysLeft}日` : '募集なし'}</div>
           {comp && <div style={{ fontSize: 13, marginTop: 4 }}>{comp.name}</div>}
-          {comp && <div style={{ fontSize: 12, fontWeight: 800, marginTop: 4 }}>{compEntry ? ENTRY_STATUS[compEntry.status].label : '未提出'}</div>}
+          {comp && <div style={{ fontSize: 12, fontWeight: 800, marginTop: 4 }}>{compEntry ? ENTRY_STATUS[compEntry.status].label : '未エントリー'}</div>}
         </Link>
         <Link to="/members" className="card tint-sky" style={{ textDecoration: 'none', color: 'inherit' }}>
           <div style={{ fontSize: 12, fontWeight: 800 }}>部員リスト</div>

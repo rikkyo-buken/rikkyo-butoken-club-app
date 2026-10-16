@@ -164,35 +164,49 @@ select pg_temp.must_equal('主将は集計を見られる（支払い済み1人�
   (select paid_count from public.bill_summaries() limit 1), 1);
 reset role;
 
--- ===== 5. 大会エントリー =====
-insert into public.competitions (id, name, held_on, request_deadline, entry_fee) values
-  ('40000000-0000-0000-0000-000000000001', '秋季大会', current_date + 30, now() + interval '5 days', 1250),
-  ('40000000-0000-0000-0000-000000000002', '締切済み大会', current_date + 10, now() - interval '1 day', 1250);
+-- ===== 5. ペアと大会エントリー =====
+-- m1（1年・リーダー）と m2（2年・パートナー）をペアにする
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
+select pg_temp.must_fail('部員はペアを直接書き換えられない',
+  $q$update public.members set partner_id = '10000000-0000-0000-0000-000000000002' where auth_user_id = auth.uid()$q$);
+select public.set_partner('10000000-0000-0000-0000-000000000002');
+reset role;
+select pg_temp.must_equal('ペアを設定すると相手側にも自動で反映される',
+  (select count(*) from public.members where (id = '10000000-0000-0000-0000-000000000001' and partner_id = '10000000-0000-0000-0000-000000000002')
+                                         or (id = '10000000-0000-0000-0000-000000000002' and partner_id = '10000000-0000-0000-0000-000000000001')), 2);
+
+insert into public.competitions (id, name, held_on, request_deadline) values
+  ('40000000-0000-0000-0000-000000000001', '秋季大会', current_date + 30, now() + interval '5 days'),
+  ('40000000-0000-0000-0000-000000000002', '締切済み大会', current_date + 10, now() - interval '1 day'),
+  ('40000000-0000-0000-0000-000000000003', '種目なしの大会', current_date + 20, now() + interval '5 days');
 insert into public.competition_dances values
   ('40000000-0000-0000-0000-000000000001', 'サンバ'), ('40000000-0000-0000-0000-000000000001', 'ルンバ'),
   ('40000000-0000-0000-0000-000000000002', 'サンバ');
 
 select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
-insert into public.entries (id, competition_id, leader_id, partner_id, requested_dances) values
-  ('41000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001',
-   '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '{サンバ,ルンバ}');
-select pg_temp.must_equal('締切前なら希望を出せる', (select count(*) from public.entries), 1);
-select pg_temp.must_fail('実施しない種目は希望できない',
-  $q$update public.entries set requested_dances = '{ワルツ}' where id = '41000000-0000-0000-0000-000000000001'$q$);
-select pg_temp.must_fail('部員は自分で確定できない',
-  $q$update public.entries set status = 'confirmed' where id = '41000000-0000-0000-0000-000000000001'$q$);
-select pg_temp.must_fail('締切後は希望を出せない',
-  $q$insert into public.entries (competition_id, leader_id, partner_id, requested_dances) values
-     ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '{サンバ}')$q$);
-select pg_temp.must_fail('自分が入っていないカップルは登録できない',
-  $q$insert into public.entries (competition_id, leader_id, partner_id) values
-     ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-00000000000c', '10000000-0000-0000-0000-00000000000f')$q$);
+select pg_temp.must_fail('部員はエントリーを直接書き込めない',
+  $q$insert into public.entries (competition_id, member_id) values ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001')$q$);
+select pg_temp.must_fail('種目がある大会は種目なしではエントリーできない',
+  $q$select public.submit_entry('40000000-0000-0000-0000-000000000001', '{}')$q$);
+select pg_temp.must_fail('実施しない種目ではエントリーできない',
+  $q$select public.submit_entry('40000000-0000-0000-0000-000000000001', '{ワルツ}')$q$);
+select pg_temp.must_fail('締切後はエントリーできない',
+  $q$select public.submit_entry('40000000-0000-0000-0000-000000000002', '{サンバ}')$q$);
+select public.submit_entry('40000000-0000-0000-0000-000000000001', '{サンバ,ルンバ}');
+select pg_temp.must_equal('エントリーするとペアの相手も自動でエントリーされる',
+  (select count(*) from public.entries where competition_id = '40000000-0000-0000-0000-000000000001'), 2);
+select public.submit_entry('40000000-0000-0000-0000-000000000003');
+select pg_temp.must_equal('種目のない大会はボタン1つでエントリーできる（ペアと2人）',
+  (select count(*) from public.entries where competition_id = '40000000-0000-0000-0000-000000000003'), 2);
+select public.withdraw_entry('40000000-0000-0000-0000-000000000003');
+select pg_temp.must_equal('取り消すとペアの相手も一緒に取り消される',
+  (select count(*) from public.entries where competition_id = '40000000-0000-0000-0000-000000000003'), 0);
 reset role;
 
 select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');  -- 主将
-update public.entries set status = 'confirmed', confirmed_dances = '{サンバ}'
- where id = '41000000-0000-0000-0000-000000000001';
-select pg_temp.must_equal('主将は確定できる', (select count(*) from public.entries where status = 'confirmed'), 1);
+update public.entries set status = 'confirmed' where competition_id = '40000000-0000-0000-0000-000000000001';
+select pg_temp.must_equal('主将はエントリーの状態を変えられる',
+  (select count(*) from public.entries where status = 'confirmed'), 2);
 reset role;
 
 -- ===== 6. 備品・貸出 =====
@@ -209,28 +223,29 @@ select pg_temp.must_fail('部員は備品を登録できない',
   $q$insert into public.equipment (name) values ('x')$q$);
 reset role;
 
--- ===== 段階2：大会の確定と請求 =====
-select pg_temp.as_user('00000000-0000-0000-0000-000000000001');  -- 1年
-select pg_temp.must_fail('部員は組の金額を変えられない',
-  $q$update public.entries set fee = 0 where id = '41000000-0000-0000-0000-000000000001'$q$);
-select pg_temp.must_fail('部員は大会を確定できない',
-  $q$select public.confirm_competition('40000000-0000-0000-0000-000000000001', current_date + 7)$q$);
+-- ===== 段階2：大会のエントリー者に請求（個別の請求） =====
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
+select pg_temp.must_fail('部員は個別の請求を作れない',
+  $q$select public.create_bill_for_members('competition', 'x', null, null, null, '[{"member_id": "10000000-0000-0000-0000-000000000001", "amount": 1}]'::jsonb)$q$);
 reset role;
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000f');  -- 財務
+select public.create_bill_for_members('competition', '秋季大会 エントリー費', current_date + 7, null,
+  '40000000-0000-0000-0000-000000000001',
+  (select jsonb_agg(jsonb_build_object('member_id', member_id, 'amount', 1250)) from public.entries where competition_id = '40000000-0000-0000-0000-000000000001'));
+reset role;
+select pg_temp.must_equal('エントリーした2人に請求ができる',
+  (select count(*) from public.bill_items i join public.bills b on b.id = i.bill_id where b.title = '秋季大会 エントリー費'), 2);
 
-select pg_temp.as_user('00000000-0000-0000-0000-00000000000c');  -- 主将
-update public.entries set fee = 3001 where id = '41000000-0000-0000-0000-000000000001';
-select public.confirm_competition('40000000-0000-0000-0000-000000000001', current_date + 7);
-select pg_temp.must_fail('同じ大会は二重に確定できない',
-  $q$select public.confirm_competition('40000000-0000-0000-0000-000000000001', current_date + 7)$q$);
+-- ===== 回収の締め =====
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000f');
+update public.bills set closed_at = now() where title = '秋季大会 エントリー費';
 reset role;
-select pg_temp.must_equal('確定でリーダーに半額（端数込み 1501円）が請求される',
-  (select amount from public.bill_items i join public.bills b on b.id = i.bill_id
-    where b.competition_id = '40000000-0000-0000-0000-000000000001' and i.member_id = '10000000-0000-0000-0000-000000000001'), 1501);
-select pg_temp.must_equal('確定でパートナーに半額（1500円）が請求される',
-  (select amount from public.bill_items i join public.bills b on b.id = i.bill_id
-    where b.competition_id = '40000000-0000-0000-0000-000000000001' and i.member_id = '10000000-0000-0000-0000-000000000002'), 1500);
-select pg_temp.must_equal('確定すると大会の状態が「確定」になる',
-  (select count(*) from public.competitions where id = '40000000-0000-0000-0000-000000000001' and status = 'confirmed'), 1);
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
+select pg_temp.must_fail('締めた請求には支払い報告できない',
+  $q$insert into public.payment_reports (bill_item_id, method)
+     select i.id, 'cash' from public.bill_items i join public.bills b on b.id = i.bill_id
+      where b.title = '秋季大会 エントリー費' and i.member_id = '10000000-0000-0000-0000-000000000001'$q$);
+reset role;
 
 -- ===== 段階2：学年ごとの金額で請求 =====
 select pg_temp.as_user('00000000-0000-0000-0000-000000000001');
@@ -285,5 +300,8 @@ reset role;
 select pg_temp.as_user('00000000-0000-0000-0000-000000000002');
 select pg_temp.must_equal('管理者が引退にすると、その人は何も見えなくなる', (select count(*) from public.events), 0);
 reset role;
+
+select pg_temp.must_equal('引退にするとペアも解除される',
+  (select count(*) from public.members where id = '10000000-0000-0000-0000-000000000001' and partner_id is null), 1);
 
 \echo '=== すべてのテストに合格 ==='

@@ -7,6 +7,7 @@ import Sheet from '../components/Sheet'
 import { BoxIcon, PlusIcon } from '../components/Icons'
 
 const BUCKET = 'equipment-photos'
+const STATE_CHIP = { available: 'green', lent: 'orange', dress_rental: 'pink', repair: '' }
 
 export default function Equipment() {
   const { member, hasRole } = useSession()
@@ -18,6 +19,7 @@ export default function Equipment() {
   const [q, setQ] = useState('')
   const [borrowing, setBorrowing] = useState(null)
   const [editing, setEditing] = useState(null)
+  const [zoom, setZoom] = useState(null)
 
   const load = useCallback(async () => {
     const [{ data: eq }, { data: ln }] = await Promise.all([
@@ -40,7 +42,7 @@ export default function Equipment() {
   const view = useMemo(() => (items ?? []).map((e) => {
     const lent = loans.find((l) => l.equipment_id === e.id && l.status === 'lent')
     const requests = loans.filter((l) => l.equipment_id === e.id && l.status === 'requested')
-    const state = e.status === 'repair' ? 'repair' : lent ? 'lent' : 'available'
+    const state = e.status === 'repair' || e.status === 'dress_rental' ? e.status : lent ? 'lent' : 'available'
     return { ...e, lent, requests, state }
   }), [items, loans])
 
@@ -104,41 +106,55 @@ export default function Equipment() {
         <input className="input" style={{ border: 0, boxShadow: 'none', padding: 0 }} type="search" placeholder="備品名で検索" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <div className="filter-row">
-        {[['all', 'すべて'], ['available', '貸出可'], ['lent', '貸出中'], ['repair', '修理中']].map(([k, l]) => (
+        {[['all', 'すべて'], ['available', '貸出可'], ['lent', '貸出中'], ['dress_rental', 'ドレスレンタル中'], ['repair', '修理中']].map(([k, l]) => (
           <button key={k} className="filter" aria-pressed={filter === k} onClick={() => setFilter(k)}>{l}</button>
         ))}
       </div>
 
-      {!items ? <p className="empty">読み込み中…</p> : shown.length === 0 ? (
+      {!items ? <><div className="card skeleton" style={{ height: 96 }} /><div className="card skeleton" style={{ height: 96 }} /></> : shown.length === 0 ? (
         <div className="card empty">該当する備品はありません</div>
       ) : shown.map((e) => {
         const mineRequested = e.requests.some((r) => r.borrower_id === member.id)
         return (
-          <div key={e.id} className="card row" style={{ padding: 12, gap: 12 }}>
-            {e.photo_path && photos[e.photo_path]
-              ? <img className="thumb" src={photos[e.photo_path]} alt="" />
-              : <div className="thumb"><BoxIcon /></div>}
-            <div className="stack grow" style={{ gap: 4 }}>
-              <span style={{ fontWeight: 800 }}>{e.name}</span>
-              <span className="sub">
-                {e.state === 'lent' ? `${e.lent.borrower.nickname} が借用中・返却 ${fmtYmd(e.lent.due_on)}` : e.location || ''}
-              </span>
-              <div className="row" style={{ gap: 6 }}>
-                <span className={`chip ${e.state === 'available' ? 'green' : e.state === 'lent' ? 'orange' : ''}`}>
-                  {e.state === 'lent' ? '貸出中' : EQUIPMENT_STATUS[e.state]}
+          <div key={e.id} className="card equip-card" style={{ padding: 0, overflow: 'hidden' }}>
+            {e.photo_path && photos[e.photo_path] ? (
+              <button type="button" className="equip-photo" onClick={() => setZoom({ src: photos[e.photo_path], name: e.name })} aria-label={`${e.name}の写真を拡大`}>
+                <img src={photos[e.photo_path]} alt="" loading="lazy" />
+                <span className={`chip state-chip ${STATE_CHIP[e.state]}`}>{e.state === 'lent' ? '貸出中' : EQUIPMENT_STATUS[e.state]}</span>
+              </button>
+            ) : null}
+            <div className="row" style={{ padding: 14, gap: 12, alignItems: 'flex-start' }}>
+              {!(e.photo_path && photos[e.photo_path]) && <div className="thumb"><BoxIcon /></div>}
+              <div className="stack grow" style={{ gap: 4 }}>
+                <span style={{ fontWeight: 800, fontSize: 16 }}>{e.name}</span>
+                <span className="sub">
+                  {e.state === 'lent' ? `${e.lent.borrower.nickname} が借用中・返却 ${fmtYmd(e.lent.due_on)}` : e.location || ''}
                 </span>
-                {canManage && e.requests.length > 0 && <span className="chip primary">申請 {e.requests.length}件</span>}
+                <div className="row" style={{ gap: 6, flexWrap: 'wrap' }}>
+                  {!(e.photo_path && photos[e.photo_path]) && (
+                    <span className={`chip ${STATE_CHIP[e.state]}`}>{e.state === 'lent' ? '貸出中' : EQUIPMENT_STATUS[e.state]}</span>
+                  )}
+                  {canManage && e.requests.length > 0 && <span className="chip primary">申請 {e.requests.length}件</span>}
+                  {mineRequested && <span className="chip orange">申請中</span>}
+                </div>
+                {e.note && <span className="sub" style={{ whiteSpace: 'pre-wrap' }}>{e.note}</span>}
               </div>
-            </div>
-            <div className="stack" style={{ gap: 6 }}>
-              {e.state === 'available' && !mineRequested && <button className="btn btn-small" onClick={() => setBorrowing(e)}>借りる</button>}
-              {mineRequested && <span className="chip orange">申請中</span>}
-              {canManage && e.state === 'lent' && <button className="btn btn-small btn-yellow" onClick={() => setLoan(e.lent, { status: 'returned' })}>返却</button>}
-              {canManage && <button className="btn btn-small btn-ghost" onClick={() => setEditing(e)}>編集</button>}
+              <div className="stack" style={{ gap: 6 }}>
+                {e.state === 'available' && !mineRequested && <button className="btn btn-small" onClick={() => setBorrowing(e)}>借りる</button>}
+                {canManage && e.state === 'lent' && <button className="btn btn-small btn-yellow" onClick={() => setLoan(e.lent, { status: 'returned' })}>返却</button>}
+                {canManage && <button className="btn btn-small btn-ghost" onClick={() => setEditing(e)}>編集</button>}
+              </div>
             </div>
           </div>
         )
       })}
+
+      {zoom && (
+        <div className="lightbox" role="dialog" aria-modal="true" aria-label={zoom.name} onClick={() => setZoom(null)}>
+          <img src={zoom.src} alt={zoom.name} />
+          <span className="lightbox-caption">{zoom.name}（タップで閉じる）</span>
+        </div>
+      )}
 
       {borrowing && <BorrowSheet item={borrowing} onClose={() => setBorrowing(null)} onSaved={() => { setBorrowing(null); load() }} />}
       {editing && <EquipmentForm initial={editing} photoUrl={photos[editing.photo_path]} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load() }} />}

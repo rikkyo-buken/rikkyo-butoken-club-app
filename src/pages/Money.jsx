@@ -5,6 +5,7 @@ import { BILL_KIND_LABELS, GRADES, ITEM_STATUS, METHOD_LABELS, gradeOf } from '.
 import { downloadCsv, fmtYmd, todayInput, yen } from '../lib/format'
 import Segmented from '../components/Segmented'
 import Sheet from '../components/Sheet'
+import CountUp from '../components/CountUp'
 import { PlusIcon } from '../components/Icons'
 
 export default function Money() {
@@ -35,17 +36,18 @@ function Mine() {
   const load = useCallback(async () => {
     const [{ data }, { data: s }] = await Promise.all([
       supabase.from('bill_items')
-        .select('*, bill:bills(title, kind, due_date, note), reports:payment_reports(result, rejected_reason, created_at)')
+        .select('*, bill:bills(title, kind, due_date, note, closed_at), reports:payment_reports(result, rejected_reason, created_at)')
         .eq('member_id', member.id)
         .order('created_at', { ascending: false }),
       supabase.from('club_settings').select('bank_info').maybeSingle()
     ])
-    setItems(data ?? [])
+    // 回収を締めた請求の未納は、部員には見せない
+    setItems((data ?? []).filter((i) => !(i.bill.closed_at && i.status === 'unpaid')))
     setBank(s?.bank_info ?? '')
   }, [member.id])
   useEffect(() => { load() }, [load])
 
-  if (!items) return <p className="empty">読み込み中…</p>
+  if (!items) return <><div className="card skeleton" style={{ height: 96 }} /><div className="card skeleton" style={{ height: 96 }} /></>
   const unpaid = items.filter((i) => i.status === 'unpaid')
   const total = unpaid.reduce((s, i) => s + i.amount, 0)
 
@@ -53,7 +55,7 @@ function Mine() {
     <>
       <div className="card stack" style={{ gap: 6 }}>
         <span className="sub" style={{ fontWeight: 700 }}>未納の合計</span>
-        <span className="big-num">{yen(total)}</span>
+        <span className="big-num"><CountUp value={total} /></span>
         {unpaid.length > 0 && <span className="chip red" style={{ alignSelf: 'flex-start' }}>未納 {unpaid.length}件</span>}
       </div>
 
@@ -197,6 +199,7 @@ function Accounting() {
           <button key={b.id} type="button" className="card stack" style={{ gap: 8, textAlign: 'left', cursor: 'pointer' }} onClick={() => setOpened(b)}>
             <div className="row">
               <span className="grow" style={{ fontWeight: 800 }}>{b.title}</span>
+              {b.closed_at && <span className="chip">締め済み</span>}
               <span className="chip">{BILL_KIND_LABELS[b.kind]}</span>
             </div>
             <div className="progress"><span style={{ width: `${rate}%` }} /></div>
@@ -245,57 +248,178 @@ function RejectSheet({ report, onClose, onSaved }) {
   )
 }
 
+// 請求を作る：学年ごと / 大会のエントリー者 / 個別に選ぶ
 function CreateBillSheet({ onClose, onSaved }) {
+  const [mode, setMode] = useState('grade')
   const [kind, setKind] = useState('dues')
   const [title, setTitle] = useState('')
   const [due, setDue] = useState(todayInput(14))
   const [note, setNote] = useState('')
   const [amounts, setAmounts] = useState({ 1: '', 2: '', 3: '', 4: '' })
+  const [members, setMembers] = useState([])
+  const [comps, setComps] = useState([])
+  const [compId, setCompId] = useState('')
+  const [entrants, setEntrants] = useState([])
+  const [selected, setSelected] = useState({}) // member_id -> 金額（文字列）
+  const [unit, setUnit] = useState('')
+  const [withPair, setWithPair] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
+  useEffect(() => {
+    supabase.from('members').select('id, nickname, full_name, join_year, partner_id').eq('status', 'active').order('join_year').order('nickname')
+      .then(({ data }) => setMembers(data ?? []))
+    supabase.from('competitions').select('id, name, held_on').order('held_on', { ascending: false }).limit(20)
+      .then(({ data }) => setComps(data ?? []))
+  }, [])
+
+  useEffect(() => {
+    if (mode !== 'competition' || !compId) { setEntrants([]); return }
+    supabase.from('entries').select('member_id, partner_id').eq('competition_id', compId).neq('status', 'withdrawn')
+      .then(({ data }) => {
+        setEntrants(data ?? [])
+        const sel = {}
+        for (const e of data ?? []) sel[e.member_id] = unit
+        setSelected(sel)
+        const c = comps.find((x) => x.id === compId)
+        if (c && !title) setTitle(`${c.name} エントリー費`)
+      })
+  }, [mode, compId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function changeMode(m) {
+    setMode(m)
+    setSelected({})
+    setKind(m === 'competition' ? 'competition' : 'dues')
+  }
+  function applyUnit(v) {
+    setUnit(v)
+    setSelected((s) => Object.fromEntries(Object.keys(s).map((k) => [k, v])))
+  }
+  function toggleMember(m) {
+    setSelected((s) => {
+      const next = { ...s }
+      const ids = [m.id]
+      if (withPair && m.partner_id && members.some((x) => x.id === m.partner_id)) ids.push(m.partner_id)
+      const on = !(m.id in s)
+      for (const id of ids) {
+        if (on) next[id] = next[id] ?? unit
+        else delete next[id]
+      }
+      return next
+    })
+  }
+
+  const nameOf = (id) => members.find((m) => m.id === id)?.nickname ?? '（不明）'
+  const people = mode === 'competition' ? entrants.map((e) => e.member_id) : members.map((m) => m.id)
+
   async function save(e) {
     e.preventDefault()
-    const p = {}
-    for (const g of GRADES) if (String(amounts[g]).trim() !== '') p[g] = Number(amounts[g])
-    if (Object.keys(p).length === 0) { setError('どれかの学年に金額を入れてください'); return }
+    setError('')
+    let res
     setBusy(true)
-    const { error } = await supabase.rpc('create_bill', { p_kind: kind, p_title: title.trim(), p_due_date: due || null, p_note: note, p_amounts: p })
+    if (mode === 'grade') {
+      const p = {}
+      for (const g of GRADES) if (String(amounts[g]).trim() !== '') p[g] = Number(amounts[g])
+      if (Object.keys(p).length === 0) { setBusy(false); setError('どれかの学年に金額を入れてください'); return }
+      res = await supabase.rpc('create_bill', { p_kind: kind, p_title: title.trim(), p_due_date: due || null, p_note: note, p_amounts: p })
+    } else {
+      const items = Object.entries(selected).map(([member_id, a]) => ({ member_id, amount: Number(a || 0) }))
+      if (items.length === 0) { setBusy(false); setError('請求する人を選んでください'); return }
+      res = await supabase.rpc('create_bill_for_members', {
+        p_kind: kind, p_title: title.trim(), p_due_date: due || null, p_note: note,
+        p_competition_id: mode === 'competition' ? compId : null, p_items: items
+      })
+    }
     setBusy(false)
-    if (error) { setError(error.message); return }
+    if (res.error) { setError(res.error.message); return }
     onSaved()
   }
 
   return (
     <Sheet title="新しい請求" onClose={onClose}>
       <form className="stack" style={{ gap: 14 }} onSubmit={save}>
-        <div className="choice-row">
-          {['dues', 'camp_event'].map((k) => (
-            <button key={k} type="button" className="choice" aria-pressed={kind === k} onClick={() => setKind(k)}>{BILL_KIND_LABELS[k]}</button>
-          ))}
+        <div className="field">
+          <span>だれに請求する？</span>
+          <Segmented items={[['grade', '学年ごと'], ['competition', '大会の出場者'], ['pick', '個別に選ぶ']]} value={mode} onChange={changeMode} />
         </div>
+
+        {mode !== 'competition' && (
+          <div className="choice-row">
+            {['dues', 'camp_event', 'competition'].map((k) => (
+              <button key={k} type="button" className="choice" aria-pressed={kind === k} onClick={() => setKind(k)}>{BILL_KIND_LABELS[k]}</button>
+            ))}
+          </div>
+        )}
+
+        {mode === 'competition' && (
+          <label className="field"><span>大会</span>
+            <select className="select" required value={compId} onChange={(e) => { setTitle(''); setCompId(e.target.value) }}>
+              <option value="">選んでください</option>
+              {comps.map((c) => <option key={c.id} value={c.id}>{c.name}（{fmtYmd(c.held_on)}）</option>)}
+            </select>
+          </label>
+        )}
+
         <label className="field"><span>タイトル</span>
           <input className="input" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="後期部費、秋合宿費 など" />
         </label>
         <label className="field"><span>締切</span>
           <input className="input" type="date" value={due} onChange={(e) => setDue(e.target.value)} />
         </label>
-        <div className="field">
-          <span>学年ごとの金額（空欄の学年には請求しない）</span>
-          <div className="amount-grid">
-            {GRADES.map((g) => (
-              <label key={g} className="row" style={{ gap: 8 }}>
-                <span className="nowrap" style={{ fontWeight: 800, width: 36, flexShrink: 0 }}>{g}年</span>
-                <input className="input" inputMode="numeric" value={amounts[g]} placeholder="円"
-                  onChange={(e) => setAmounts((a) => ({ ...a, [g]: e.target.value.replace(/\D/g, '') }))} />
-              </label>
-            ))}
+
+        {mode === 'grade' ? (
+          <div className="field">
+            <span>学年ごとの金額（空欄の学年には請求しない）</span>
+            <div className="amount-grid">
+              {GRADES.map((g) => (
+                <label key={g} className="row" style={{ gap: 8 }}>
+                  <span className="nowrap" style={{ fontWeight: 800, width: 36, flexShrink: 0 }}>{g}年</span>
+                  <input className="input" inputMode="numeric" value={amounts[g]} placeholder="円"
+                    onChange={(e) => setAmounts((a) => ({ ...a, [g]: e.target.value.replace(/\D/g, '') }))} />
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : (
+          <>
+            <label className="field"><span>1人あたりの金額（一人ずつ変えることもできます）</span>
+              <input className="input" inputMode="numeric" value={unit} placeholder="円" onChange={(e) => applyUnit(e.target.value.replace(/\D/g, ''))} />
+            </label>
+            {mode === 'pick' && (
+              <label className="row sub" style={{ gap: 8 }}>
+                <input type="checkbox" checked={withPair} onChange={(e) => setWithPair(e.target.checked)} />
+                ペアの相手も一緒に選ぶ
+              </label>
+            )}
+            {mode === 'competition' && compId && entrants.length === 0 && <div className="card empty">この大会のエントリーはまだありません</div>}
+            {people.length > 0 && (
+              <div className="card" style={{ padding: '4px 14px', maxHeight: 340, overflowY: 'auto' }}>
+                {people.map((id) => {
+                  const m = members.find((x) => x.id === id) ?? { id, nickname: nameOf(id) }
+                  const on = id in selected
+                  return (
+                    <div key={id} className="list-row">
+                      <label className="row grow" style={{ gap: 10, cursor: 'pointer' }}>
+                        <input type="checkbox" checked={on} onChange={() => (mode === 'pick' ? toggleMember(m) : setSelected((s) => { const n = { ...s }; if (on) delete n[id]; else n[id] = unit; return n }))} />
+                        <span style={{ fontWeight: 700 }}>{m.nickname}</span>
+                        {m.join_year && <span className="sub">{gradeOf(m.join_year)}年</span>}
+                      </label>
+                      {on && (
+                        <input className="input" style={{ width: 100, minHeight: 40 }} inputMode="numeric" value={selected[id]} placeholder="円"
+                          onChange={(e) => setSelected((s) => ({ ...s, [id]: e.target.value.replace(/\D/g, '') }))} />
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            <span className="sub">{Object.keys(selected).length}人に請求・合計 {yen(Object.values(selected).reduce((s, a) => s + Number(a || 0), 0))}</span>
+          </>
+        )}
+
         <label className="field"><span>メモ</span>
           <input className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </label>
-        <p className="sub" style={{ margin: 0 }}>作成後に、一人ずつ金額の変更や免除ができます。大会のエントリー費は、大会の確定時に自動で作られます。</p>
         {error && <div className="notice error">{error}</div>}
         <button className="btn btn-primary btn-block" disabled={busy}>{busy ? '作成中…' : '請求を作る'}</button>
       </form>
@@ -303,11 +427,16 @@ function CreateBillSheet({ onClose, onSaved }) {
   )
 }
 
-// 請求の中身：一人ずつの状態と、金額変更・免除・現金受領
+// 請求の中身：一人ずつの状態と、金額変更・免除・現金受領・人の追加・回収の締め
 function BillSheet({ bill, onClose }) {
   const [items, setItems] = useState([])
+  const [closedAt, setClosedAt] = useState(bill.closed_at)
   const [editing, setEditing] = useState(null)
   const [amount, setAmount] = useState('')
+  const [adding, setAdding] = useState(false)
+  const [members, setMembers] = useState([])
+  const [addId, setAddId] = useState('')
+  const [addAmount, setAddAmount] = useState('')
 
   const load = useCallback(async () => {
     const { data } = await supabase.from('bill_items')
@@ -316,11 +445,30 @@ function BillSheet({ bill, onClose }) {
     setItems((data ?? []).sort((a, b) => a.member.join_year - b.member.join_year || a.member.nickname.localeCompare(b.member.nickname, 'ja')))
   }, [bill.id])
   useEffect(() => { load() }, [load])
+  useEffect(() => {
+    if (adding && members.length === 0) {
+      supabase.from('members').select('id, nickname, full_name, join_year').eq('status', 'active').order('nickname')
+        .then(({ data }) => setMembers(data ?? []))
+    }
+  }, [adding, members.length])
 
   async function update(item, patch) {
     await supabase.from('bill_items').update(patch).eq('id', item.id)
     setEditing(null)
     load()
+  }
+  async function addMember(e) {
+    e.preventDefault()
+    if (!addId) return
+    await supabase.from('bill_items').insert({ bill_id: bill.id, member_id: addId, amount: Number(addAmount || 0) })
+    setAddId(''); setAddAmount(''); setAdding(false)
+    load()
+  }
+  async function toggleClosed() {
+    const next = closedAt ? null : new Date().toISOString()
+    if (next && !window.confirm('回収を締めますか？残っている未納は部員の画面から消え、支払い報告もできなくなります。あとで再開できます。')) return
+    await supabase.from('bills').update({ closed_at: next }).eq('id', bill.id)
+    setClosedAt(next)
   }
 
   function exportCsv() {
@@ -330,10 +478,29 @@ function BillSheet({ bill, onClose }) {
     ])
   }
 
+  const already = new Set(items.map((i) => i.member_id))
+
   return (
     <Sheet title={bill.title} onClose={onClose}>
-      <button className="btn btn-small" onClick={exportCsv}>CSVで書き出す</button>
+      {closedAt && <div className="notice info">{fmtYmd(closedAt)} に回収を締めました。残りの未納は部員には表示されていません。</div>}
+      <div className="grid-2">
+        <button className="btn btn-small" onClick={() => setAdding((v) => !v)}>人を追加</button>
+        <button className="btn btn-small" onClick={exportCsv}>CSVで書き出す</button>
+      </div>
+      {adding && (
+        <form className="card stack pop-in" style={{ gap: 10 }} onSubmit={addMember}>
+          <select className="select" value={addId} onChange={(e) => setAddId(e.target.value)} required>
+            <option value="">追加する部員</option>
+            {members.filter((m) => !already.has(m.id)).map((m) => <option key={m.id} value={m.id}>{m.nickname}（{m.full_name}・{gradeOf(m.join_year)}年）</option>)}
+          </select>
+          <div className="row">
+            <input className="input" inputMode="numeric" value={addAmount} placeholder="金額（円）" onChange={(e) => setAddAmount(e.target.value.replace(/\D/g, ''))} required />
+            <button className="btn btn-small btn-primary">追加</button>
+          </div>
+        </form>
+      )}
       <div className="card" style={{ padding: '6px 16px' }}>
+        {items.length === 0 && <p className="empty">まだ誰にも請求していません</p>}
         {items.map((i) => (
           <div key={i.id} className="list-row">
             <div className="stack grow" style={{ gap: 2 }}>
@@ -345,7 +512,7 @@ function BillSheet({ bill, onClose }) {
         ))}
       </div>
       {editing && (
-        <div className="card stack" style={{ gap: 10 }}>
+        <div className="card stack pop-in" style={{ gap: 10 }}>
           <span style={{ fontWeight: 800 }}>{editing.member.nickname} さん</span>
           <div className="row">
             <input className="input" inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value.replace(/\D/g, ''))} />
@@ -355,9 +522,11 @@ function BillSheet({ bill, onClose }) {
             {editing.status !== 'paid' && <button className="btn btn-small" onClick={() => update(editing, { status: 'paid' })}>受け取り済みにする</button>}
             {editing.status !== 'waived' && <button className="btn btn-small" onClick={() => update(editing, { status: 'waived' })}>免除する</button>}
             {editing.status !== 'unpaid' && <button className="btn btn-small btn-danger" onClick={() => update(editing, { status: 'unpaid' })}>未納に戻す</button>}
+            <button className="btn btn-small btn-ghost" onClick={async () => { if (window.confirm('この人をこの請求から外しますか？')) { await supabase.from('bill_items').delete().eq('id', editing.id); setEditing(null); load() } }}>請求から外す</button>
           </div>
         </div>
       )}
+      <button className={`btn btn-block ${closedAt ? '' : 'btn-danger'}`} onClick={toggleClosed}>{closedAt ? '回収を再開する' : '回収を締める'}</button>
     </Sheet>
   )
 }
@@ -387,14 +556,14 @@ function Summary() {
   useEffect(() => {
     supabase.rpc('bill_summaries').then(({ data }) => setRows(data ?? []))
   }, [])
-  if (!rows) return <p className="empty">読み込み中…</p>
+  if (!rows) return <><div className="card skeleton" style={{ height: 96 }} /><div className="card skeleton" style={{ height: 96 }} /></>
   if (rows.length === 0) return <div className="card empty">請求はまだありません</div>
   return rows.map((r) => {
     const counted = r.total_count - 0
     const rate = counted ? Math.round((r.paid_count / counted) * 100) : 0
     return (
       <div key={r.bill_id} className="card stack" style={{ gap: 8 }}>
-        <span style={{ fontWeight: 800 }}>{r.title}</span>
+        <div className="row"><span className="grow" style={{ fontWeight: 800 }}>{r.title}</span>{r.closed && <span className="chip">締め済み</span>}</div>
         <div className="progress"><span style={{ width: `${rate}%` }} /></div>
         <span className="sub">支払い済み {r.paid_count}人・確認待ち {r.pending_count}人・未納 {r.unpaid_count}人</span>
         <span className="sub">{yen(r.paid_amount)} / {yen(r.total_amount)}{r.due_date ? `・締切 ${fmtYmd(r.due_date)}` : ''}</span>
