@@ -87,7 +87,7 @@ Netlify の Environment variables に `VITE_SUPABASE_URL` と `VITE_SUPABASE_ANO
 アプリ内のお知らせ（ベル）と毎朝9時の自動チェックは、`..._notifications.sql` と `..._cron.sql` を流すだけで動く。
 スマホへのプッシュ通知には、次の4つを追加で設定する。
 
-1. **Edge Function を作る**：Edge Functions →「Deploy a new function」→「Via Editor」。名前を `send-push` にして、
+1. **Edge Function を作る**：Edge Functions →「Deploy a new function」→「Via Editor」。名前を必ず `send-push` に変えて（自動の名前のままだと「Requested function was not found」で届かない）、
    `supabase/functions/send-push/index.ts` の中身を貼り付けて Deploy。
 2. **シークレットを登録する**：Edge Functions → Secrets（または Project Settings → Edge Functions）で
    - `VAPID_PRIVATE_JWK`：プッシュ通知の秘密鍵（管理者が別途保管しているJSON）
