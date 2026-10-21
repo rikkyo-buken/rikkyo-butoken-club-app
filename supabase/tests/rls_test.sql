@@ -327,4 +327,15 @@ select public.daily_reminders();
 select pg_temp.must_equal('毎朝のチェックで「今日が支払い締切です」が1回だけ届く',
   (select count(*) from public.notifications where member_id = '10000000-0000-0000-0000-000000000001' and title = '今日が支払い締切です'), 1);
 
+-- ===== きょうのひとこと =====
+select pg_temp.as_user('00000000-0000-0000-0000-000000000001');  -- 1年（役職なし）
+select pg_temp.must_equal('部員はひとことを読める（最初の20件）', (select count(*) from public.quotes), 20);
+select pg_temp.must_fail('役職のない部員はひとことを追加できない',
+  $q$insert into public.quotes (body) values ('x')$q$);
+reset role;
+select pg_temp.as_user('00000000-0000-0000-0000-00000000000f');  -- 財務（幹部）
+insert into public.quotes (body) values ('幹部が追加したひとこと');
+select pg_temp.must_equal('幹部はひとことを追加できる', (select count(*) from public.quotes), 21);
+reset role;
+
 \echo '=== すべてのテストに合格 ==='

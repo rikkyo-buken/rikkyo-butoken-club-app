@@ -14,6 +14,7 @@ import Money from './pages/Money'
 import Contest from './pages/Contest'
 import Equipment from './pages/Equipment'
 import Notifications from './pages/Notifications'
+import Quotes from './pages/Quotes'
 
 export default function App() {
   const { loading } = useSession()
@@ -52,6 +53,7 @@ function Gate() {
         <Route path="members" element={<Members />} />
         <Route path="me" element={<Profile />} />
         <Route path="notifications" element={<Notifications />} />
+        <Route path="quotes" element={<Quotes />} />
         {isAdmin && <Route path="admin/invites" element={<Invites />} />}
         {isAdmin && <Route path="admin/grades" element={<GradeSettings />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

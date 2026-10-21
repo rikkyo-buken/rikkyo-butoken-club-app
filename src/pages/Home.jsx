@@ -9,6 +9,7 @@ import GradePicker from '../components/GradePicker'
 import Sheet from '../components/Sheet'
 import CountUp from '../components/CountUp'
 import Bell from '../components/Bell'
+import DailyWord from '../components/DailyWord'
 
 export default function Home() {
   const { member, isOfficer } = useSession()
@@ -61,6 +62,8 @@ export default function Home() {
           </Link>
         </div>
       </div>
+
+      <DailyWord />
 
       {unpaid.length > 0 && (
         <Link to="/money" className="card stack" style={{ textDecoration: 'none', color: 'inherit', gap: 8 }}>
